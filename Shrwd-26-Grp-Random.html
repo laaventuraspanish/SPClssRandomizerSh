@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clase de Español - Sistema de Grupos y Ruleta</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Canvas Confetti for Wheel Winners -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        .wheel-container {
+            position: relative;
+            width: 380px;
+            height: 380px;
+            margin: 0 auto;
+        }
+        #wheelCanvas {
+            border-radius: 50%;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            transition: transform 4s cubic-bezier(0.15, 0.99, 0.18, 0.99);
+        }
+        .wheel-pointer {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 18px solid transparent;
+            border-right: 18px solid transparent;
+            border-top: 30px solid #dc2626;
+            z-index: 20;
+            filter: drop-shadow(0px 3px 2px rgba(0,0,0,0.4));
+        }
+        .badge-absent {
+            opacity: 0.45;
+            text-decoration: line-through;
+            background-color: #f3f4f6 !important;
+            border-color: #d1d5db !important;
+            color: #6b7280 !important;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen pb-12">
+
+    <!-- Header Navigation -->
+    <header class="bg-red-700 text-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center space-x-3">
+                <span class="text-3xl">🇲🇽 🇪🇸</span>
+                <div>
+                    <h1 class="text-2xl font-bold tracking-wide">¡Profe Oceguera - Aula de Español!</h1>
+                    <p class="text-xs text-red-200">Generador de Grupos, Asistencia y Ruleta de la Fortuna</p>
+                </div>
+            </div>
+
+            <!-- Class Selector -->
+            <div class="flex items-center space-x-2 bg-red-800 px-3 py-2 rounded-lg shadow-inner">
+                <label for="classSelect" class="text-sm font-semibold text-red-100 whitespace-nowrap"><i class="fa-solid fa-chalkboard-user mr-1"></i> Clase:</label>
+                <select id="classSelect" onchange="loadSelectedClass()" class="bg-white text-slate-900 font-medium rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm">
+                    <!-- Populated dynamically -->
+                </select>
+            </div>
+
+            <!-- Fullscreen Toggle Button for Embedded Google Sites -->
+            <button id="fullscreenBtn" onclick="toggleFullScreen()" class="flex items-center gap-2 bg-red-800 hover:bg-red-900 text-white font-semibold text-xs md:text-sm px-3 py-2 rounded-lg shadow transition" title="Pantalla Completa">
+                <i id="fullscreenIcon" class="fa-solid fa-expand"></i>
+                <span id="fullscreenText" class="hidden sm:inline">Pantalla Completa</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Left Column: Attendance Roster Management (4 Cols) -->
+        <section class="lg:col-span-4 bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+            <div class="flex justify-between items-center mb-4 border-b pb-3">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-user-check text-red-600 mr-2"></i>Asistencia</h2>
+                    <p class="text-xs text-slate-500">Haz clic en un estudiante para marcar falta.</p>
+                </div>
+                <span id="attendanceSummary" class="text-xs font-bold bg-slate-100 text-slate-700 px-2.5 py-1 rounded-full border">
+                    0/0 Presentes
+                </span>
+            </div>
+
+            <div class="flex gap-2 mb-3">
+                <button onclick="setAllAttendance(true)" class="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold px-2.5 py-1.5 rounded border border-emerald-200 transition">
+                    <i class="fa-solid fa-check mr-1"></i> Todos Presentes
+                </button>
+                <button onclick="setAllAttendance(false)" class="text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold px-2.5 py-1.5 rounded border border-rose-200 transition">
+                    <i class="fa-solid fa-xmark mr-1"></i> Desmarcar Todos
+                </button>
+            </div>
+
+            <!-- Student Grid -->
+            <div id="studentGrid" class="grid grid-cols-2 gap-2 max-h-[500px] overflow-y-auto pr-1">
+                <!-- Populated dynamically -->
+            </div>
+
+            <!-- Add Custom Student -->
+            <div class="mt-4 pt-3 border-t flex gap-2">
+                <input type="text" id="newStudentName" placeholder="Añadir estudiante..." class="w-full text-sm border rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-red-500">
+                <button onclick="addStudent()" class="bg-red-600 text-white px-3 py-1.5 rounded text-sm font-semibold hover:bg-red-700 transition">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- Right Column: Interactive Tabs for Groups, Wheel & Spanish Tools (8 Cols) -->
+        <section class="lg:col-span-8 space-y-6">
+
+            <!-- Navigation Tabs -->
+            <div class="flex border-b border-slate-200 bg-white rounded-t-xl px-4 pt-3 gap-2 shadow-sm">
+                <button id="tabBtnGroups" onclick="switchTab('groups')" class="px-4 py-2 text-sm font-bold border-b-2 border-red-600 text-red-600 flex items-center gap-2">
+                    <i class="fa-solid fa-users"></i> Crear Grupos
+                </button>
+                <button id="tabBtnWheel" onclick="switchTab('wheel')" class="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800 border-b-2 border-transparent flex items-center gap-2">
+                    <i class="fa-solid fa-dharmachakra"></i> Ruleta de la Fortuna
+                </button>
+                <button id="tabBtnSpeaking" onclick="switchTab('speaking')" class="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800 border-b-2 border-transparent flex items-center gap-2">
+                    <i class="fa-solid fa-comments"></i> Parejas de Habla
+                </button>
+            </div>
+
+            <!-- TAB 1: GROUP GENERATOR -->
+            <div id="tabGroups" class="bg-white p-6 rounded-b-xl shadow-sm border border-slate-200 space-y-5">
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <!-- Group Mode -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 mb-1">Modo de Agrupación</label>
+                        <select id="groupMode" onchange="toggleGroupInputs()" class="w-full bg-white border text-sm rounded-md px-2.5 py-1.5 focus:ring-1 focus:ring-red-500">
+                            <option value="numGroups">Número Fijo de Grupos</option>
+                            <option value="sizeGroup">Estudiantes por Grupo</option>
+                        </select>
+                    </div>
+
+                    <!-- Target Number -->
+                    <div>
+                        <label id="groupValLabel" class="block text-xs font-bold text-slate-600 mb-1">Número de Grupos</label>
+                        <input type="number" id="groupValInput" value="4" min="1" max="20" class="w-full bg-white border text-sm rounded-md px-2.5 py-1.5 focus:ring-1 focus:ring-red-500">
+                    </div>
+
+                    <!-- Naming Scheme -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 mb-1">Nombres de Grupos</label>
+                        <select id="groupNaming" class="w-full bg-white border text-sm rounded-md px-2.5 py-1.5 focus:ring-1 focus:ring-red-500">
+                            <option value="numbers">Grupo 1, Grupo 2...</option>
+                            <option value="animals">Animales (Los Delfines, Los Búhos...)</option>
+                            <option value="countries">Países Hispanohablantes (España, México...)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Additional Options -->
+                <div class="flex flex-wrap items-center justify-between gap-4">
+                    <label class="flex items-center text-xs font-medium text-slate-700 cursor-pointer">
+                        <input type="checkbox" id="assignRolesCheck" class="rounded text-red-600 focus:ring-red-500 mr-2">
+                        Asignar roles de grupo en español (Portavoz, Escritor, Cronometrador, Vocabulario)
+                    </label>
+
+                    <div class="flex gap-2">
+                        <button onclick="generateGroups()" class="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-lg text-sm shadow flex items-center gap-2 transition">
+                            <i class="fa-solid fa-shuffle"></i> Generar Grupos
+                        </button>
+                        <button onclick="sendGroupsToWheel()" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 py-2 rounded-lg text-sm shadow flex items-center gap-1 transition" title="Enviar grupos a la ruleta">
+                            <i class="fa-solid fa-dharmachakra"></i> Usar en Ruleta
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Group Display Area -->
+                <div id="groupsDisplay" class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                    <div class="col-span-full text-center py-8 text-slate-400 italic">
+                        Selecciona las opciones arriba y presiona "Generar Grupos".
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: WHEEL OF FORTUNE -->
+            <div id="tabWheel" class="hidden bg-white p-6 rounded-b-xl shadow-sm border border-slate-200 space-y-6">
+                
+                <div class="flex flex-wrap items-center justify-between gap-4 bg-amber-50 border border-amber-200 p-4 rounded-lg">
+                    <div class="flex items-center space-x-3">
+                        <label class="text-xs font-bold text-amber-900">Origen de Datos:</label>
+                        <select id="wheelSource" onchange="updateWheelItems()" class="bg-white border border-amber-300 text-xs font-bold rounded px-2.5 py-1.5 text-amber-900">
+                            <option value="students">Estudiantes Presentes</option>
+                            <option value="groups">Grupos Generados</option>
+                        </select>
+                    </div>
+
+                    <label class="flex items-center text-xs font-bold text-amber-900 cursor-pointer">
+                        <input type="checkbox" id="removeAfterPick" checked class="rounded text-amber-600 focus:ring-amber-500 mr-2">
+                        Eliminar de la ruleta tras ser seleccionado
+                    </label>
+                </div>
+
+                <!-- Wheel Canvas Container -->
+                <div class="flex flex-col items-center justify-center relative py-4">
+                    <div class="wheel-container">
+                        <div class="wheel-pointer"></div>
+                        <canvas id="wheelCanvas" width="380" height="380"></canvas>
+                    </div>
+
+                    <button id="spinBtn" onclick="spinWheel()" class="mt-6 bg-gradient-to-r from-red-600 to-amber-500 hover:from-red-700 hover:to-amber-600 text-white font-extrabold text-lg px-8 py-3 rounded-full shadow-lg transform active:scale-95 transition flex items-center gap-2">
+                        <i class="fa-solid fa-play"></i> ¡GIRAR RULETA!
+                    </button>
+                </div>
+
+                <!-- Winner Display Alert -->
+                <div id="winnerDisplay" class="hidden bg-emerald-50 border border-emerald-300 rounded-lg p-4 text-center">
+                    <span class="text-xs font-bold uppercase tracking-wider text-emerald-600">¡Seleccionado!</span>
+                    <h3 id="winnerText" class="text-2xl font-black text-emerald-900 my-1"></h3>
+                    <p id="winnerSubtext" class="text-xs text-emerald-700"></p>
+                </div>
+            </div>
+
+            <!-- TAB 3: SPANISH SPEAKING PARTNERS (PAREJAS DE HABLA) -->
+            <div id="tabSpeaking" class="hidden bg-white p-6 rounded-b-xl shadow-sm border border-slate-200 space-y-5">
+                <div class="flex justify-between items-center border-b pb-3">
+                    <div>
+                        <h3 class="font-bold text-slate-800"><i class="fa-solid fa-comments text-red-600 mr-2"></i>Parejas de Conversación Rápida</h3>
+                        <p class="text-xs text-slate-500">Parejas instantáneas (1 contra 1) con tema de conversación en español.</p>
+                    </div>
+                    <button onclick="generatePairs()" class="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-3.5 py-2 rounded shadow transition">
+                        <i class="fa-solid fa-rotate mr-1"></i> Generar Nuevas Parejas
+                    </button>
+                </div>
+
+                <div id="speakingPromptBox" class="bg-red-50 border-l-4 border-red-600 p-3 rounded text-xs text-red-900 font-medium">
+                    <span class="font-bold">Pregunta del Día:</span> <span id="currentPrompt">"¿Qué hiciste este fin de semana?"</span>
+                    <button onclick="changePrompt()" class="ml-2 text-red-700 underline text-[11px]">Cambiar pregunta</button>
+                </div>
+
+                <div id="pairsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <script>
+        // Updated Class Rosters including 25 students for Spanish 2 Hora 7
+        const CLASS_ROSTERS = {
+            "SP1A_Hora_1": {
+                name: "Spanish 1A - Hora 1 (SIS)",
+                students: ["Sammy H", "Zephie C", "Eden F", "Ronan D", "Daphne M", "Leoslav S", "Jesri T", "Aria RJ", "Stanley H", "Maeve E", "Aria R", "Gretchen P", "Rhone L", "Oliver M", "Talon P", "KJ T", "Simona E", "Liam T", "Lili D", "Matvii T", "Talon K", "Maria R", "Nyx D", "Benji F", "Reid F", "AJ J"]
+            },
+            "SP1A_Hora_3": {
+                name: "Spanish 1A - Hora 3 (SIS)",
+                students: ["August P", "Anika R", "Lola H", "Jayden W", "Luna B", "Jack J", "Nora R", "Miles Q", "Beckett P", "Simon P", "Ava CP", "Ainsley S", "Steven L", "Rowen S", "Sylvia K", "Adeline M", "Liam L", "Allen H", "Melody T", "Aubrey P", "Thomas E", "Becca D", "Penny RR", "Ava H", "Callie P", "Alberto V"]
+            },
+            "SP1A_Hora_4": {
+                name: "Spanish 1A - Hora 4 (SIS)",
+                students: ["Lily BW", "Will S", "AB B", "Haaken L", "Calla B", "Harry S", "Myonna Ki G", "Alice K", "Vida W", "Ari P", "Henna W", "Liz K", "Alyssia S", "Seamus L", "Emma SW", "Jack H", "Mabel Grace B", "Nia K", "Davey L", "George VH", "Alice C", "Nick B", "Sophia S", "Nishorgo G", "Atticus R", "Camila MG", "Amelia H"]
+            },
+            "SP2_Hora_5": {
+                name: "Spanish 2 - Hora 5 (SHS)",
+                students: ["Pierce S", "Olesia K", "Ben T", "Naseem M", "Maddie K", "Sam Z", "Isak L", "Catherine MR", "Elena B", "Jude G", "Josh H", "Ilija I", "Maya M", "Lucie F", "Anani V", "Gio J", "Zara K", "Micah KG", "Netta P", "Liam W", "Kenzie V"]
+            },
+            "SP2_Hora_7": {
+                name: "Spanish 2 - Hora 7 (SHS)",
+                students: ["Elijah DG", "Sophia H", "Abby S", "Quinn O", "Hazel T", "Blake S", "Reina A", "Drake D", "Jack B", "Abby A", "Adhia S", "Ethan S", "Arun K", "Margaret D", "Gabby D", "Isabel B", "Charlotte R", "Chase C", "Sofia F", "Yahaya M", "Elena B", "Oliver H", "Grace D", "Evan S", "Zoey Z"]
+            }
+        };
+
+        const SPANISH_ROLES = [
+            { title: "El Portavoz", desc: "Habla en representación del grupo." },
+            { title: "El Escritor", desc: "Escribe las respuestas y notas." },
+            { title: "El Cronometrador", desc: "Controla el tiempo de la actividad." },
+            { title: "El Vocabulario", desc: "Busca palabras desconocidas." }
+        ];
+
+        const SPANISH_PROMPTS = [
+            "¿Qué hiciste este fin de semana?",
+            "¿Cuál es tu comida o platillo favorito y por qué?",
+            "Describe tu rutina diaria por la mañana.",
+            "¿Qué vas a hacer durante las próximas vacaciones?",
+            "¿Quién es tu persona o personaje favorito?",
+            "¿Qué asignatura te gusta más en la escuela y por qué?"
+        ];
+
+        const ANIMAL_NAMES = ["Los Delfines 🐬", "Los Búhos 🦉", "Los Osos 🐻", "Las Águilas 🦅", "Los Zorros 🦊", "Los Gatos 🐱", "Los Jaguares 🐆", "Los Toros 🐂"];
+        const COUNTRY_NAMES = ["España 🇪🇸", "México 🇲🇽", "Colombia 🇨🇴", "Argentina 🇦🇷", "Perú 🇵🇪", "Costa Rica 🇨🇷", "Chile 🇨🇱", "Guatemala 🇬🇹"];
+
+        // Application State Variables
+        let currentClassKey = "SP1A_Hora_1";
+        let currentRoster = [];
+        let currentGeneratedGroups = [];
+        let wheelItems = [];
+        let isSpinning = false;
+        let startAngle = 0;
+
+        window.onload = function() {
+            populateClassSelect();
+            loadSelectedClass();
+            initWheelCanvas();
+        };
+
+        function populateClassSelect() {
+            const select = document.getElementById('classSelect');
+            select.innerHTML = '';
+            for (let key in CLASS_ROSTERS) {
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.textContent = CLASS_ROSTERS[key].name;
+                select.appendChild(opt);
+            }
+        }
+
+        function loadSelectedClass() {
+            currentClassKey = document.getElementById('classSelect').value;
+            const rawNames = CLASS_ROSTERS[currentClassKey].students;
+            currentRoster = rawNames.map((name, index) => ({
+                id: index,
+                name: name,
+                present: true
+            }));
+            renderStudentGrid();
+            updateWheelItems();
+            document.getElementById('groupsDisplay').innerHTML = `
+                <div class="col-span-full text-center py-8 text-slate-400 italic">
+                    Selecciona las opciones arriba y presiona "Generar Grupos".
+                </div>`;
+            document.getElementById('winnerDisplay').classList.add('hidden');
+        }
+
+        function renderStudentGrid() {
+            const grid = document.getElementById('studentGrid');
+            grid.innerHTML = '';
+            
+            let presentCount = 0;
+            currentRoster.forEach(student => {
+                if (student.present) presentCount++;
+                const card = document.createElement('div');
+                card.onclick = () => toggleAttendance(student.id);
+                card.className = `p-2 rounded-lg border text-xs font-semibold cursor-pointer transition flex items-center justify-between select-none ${
+                    student.present 
+                    ? 'bg-white border-slate-300 text-slate-800 shadow-sm hover:border-red-400' 
+                    : 'badge-absent'
+                }`;
+                card.innerHTML = `
+                    <span>${student.name}</span>
+                    <i class="fa-solid ${student.present ? 'fa-check text-emerald-600' : 'fa-user-slash text-slate-400'}"></i>
+                `;
+                grid.appendChild(card);
+            });
+
+            document.getElementById('attendanceSummary').textContent = `${presentCount}/${currentRoster.length} Presentes`;
+        }
+
+        function toggleAttendance(id) {
+            const student = currentRoster.find(s => s.id === id);
+            if (student) {
+                student.present = !student.present;
+                renderStudentGrid();
+                updateWheelItems();
+            }
+        }
+
+        function setAllAttendance(status) {
+            currentRoster.forEach(s => s.present = status);
+            renderStudentGrid();
+            updateWheelItems();
+        }
+
+        function addStudent() {
+            const input = document.getElementById('newStudentName');
+            const name = input.value.trim();
+            if (name) {
+                currentRoster.push({
+                    id: Date.now(),
+                    name: name,
+                    present: true
+                });
+                input.value = '';
+                renderStudentGrid();
+                updateWheelItems();
+            }
+        }
+
+        function toggleGroupInputs() {
+            const mode = document.getElementById('groupMode').value;
+            const label = document.getElementById('groupValLabel');
+            label.textContent = mode === 'numGroups' ? 'Número de Grupos' : 'Estudiantes por Grupo';
+        }
+
+        function getPresentStudents() {
+            return currentRoster.filter(s => s.present).map(s => s.name);
+        }
+
+        function shuffleArray(array) {
+            const arr = [...array];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        function generateGroups() {
+            const students = shuffleArray(getPresentStudents());
+            if (students.length === 0) {
+                return;
+            }
+
+            const mode = document.getElementById('groupMode').value;
+            const val = parseInt(document.getElementById('groupValInput').value) || 2;
+            const naming = document.getElementById('groupNaming').value;
+            const assignRoles = document.getElementById('assignRolesCheck').checked;
+
+            let groups = [];
+            if (mode === 'numGroups') {
+                const numGroups = Math.max(1, Math.min(val, students.length));
+                for (let i = 0; i < numGroups; i++) groups.push([]);
+                students.forEach((st, idx) => {
+                    groups[idx % numGroups].push(st);
+                });
+            } else {
+                const groupSize = Math.max(1, val);
+                for (let i = 0; i < students.length; i += groupSize) {
+                    groups.push(students.slice(i, i + groupSize));
+                }
+            }
+
+            currentGeneratedGroups = groups.map((grpMembers, idx) => {
+                let name = `Grupo ${idx + 1}`;
+                if (naming === 'animals') name = ANIMAL_NAMES[idx % ANIMAL_NAMES.length];
+                if (naming === 'countries') name = COUNTRY_NAMES[idx % COUNTRY_NAMES.length];
+                return { name, members: grpMembers };
+            });
+
+            renderGroups(assignRoles);
+        }
+
+        function renderGroups(assignRoles) {
+            const display = document.getElementById('groupsDisplay');
+            display.innerHTML = '';
+
+            currentGeneratedGroups.forEach(grp => {
+                const card = document.createElement('div');
+                card.className = 'bg-slate-50 border border-slate-200 rounded-lg p-4 shadow-sm';
+                
+                let membersHTML = '';
+                grp.members.forEach((m, i) => {
+                    let roleBadge = '';
+                    if (assignRoles && i < SPANISH_ROLES.length) {
+                        roleBadge = `<span class="ml-2 text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded font-semibold" title="${SPANISH_ROLES[i].desc}">${SPANISH_ROLES[i].title}</span>`;
+                    }
+                    membersHTML += `<li class="py-1 text-xs border-b border-slate-200 last:border-0 flex justify-between items-center"><span class="font-medium text-slate-700">${m}</span>${roleBadge}</li>`;
+                });
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-center mb-2 pb-1 border-b border-slate-300">
+                        <h4 class="font-bold text-sm text-red-700">${grp.name}</h4>
+                        <span class="text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-bold">${grp.members.length} est.</span>
+                    </div>
+                    <ul>${membersHTML}</ul>
+                `;
+                display.appendChild(card);
+            });
+        }
+
+        function sendGroupsToWheel() {
+            if (currentGeneratedGroups.length === 0) return;
+            document.getElementById('wheelSource').value = 'groups';
+            switchTab('wheel');
+            updateWheelItems();
+        }
+
+        function switchTab(tab) {
+            ['groups', 'wheel', 'speaking'].forEach(t => {
+                document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).classList.add('hidden');
+                const btn = document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1));
+                btn.className = "px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800 border-b-2 border-transparent flex items-center gap-2";
+            });
+
+            document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.remove('hidden');
+            const activeBtn = document.getElementById('tabBtn' + tab.charAt(0).toUpperCase() + tab.slice(1));
+            activeBtn.className = "px-4 py-2 text-sm font-bold border-b-2 border-red-600 text-red-600 flex items-center gap-2";
+
+            if (tab === 'wheel') drawWheel();
+            if (tab === 'speaking' && document.getElementById('pairsGrid').children.length === 0) generatePairs();
+        }
+
+        function updateWheelItems() {
+            const source = document.getElementById('wheelSource').value;
+            if (source === 'students') {
+                wheelItems = getPresentStudents();
+            } else {
+                wheelItems = currentGeneratedGroups.map(g => g.name);
+            }
+            drawWheel();
+        }
+
+        const colors = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+
+        function drawWheel() {
+            const canvas = document.getElementById('wheelCanvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const numSegments = wheelItems.length;
+            const radius = canvas.width / 2;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (numSegments === 0) {
+                ctx.fillStyle = '#cbd5e1';
+                ctx.beginPath();
+                ctx.arc(radius, radius, radius, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.fillStyle = '#475569';
+                ctx.font = 'bold 14px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('Sin elementos', radius, radius);
+                return;
+            }
+
+            const arc = (2 * Math.PI) / numSegments;
+
+            for (let i = 0; i < numSegments; i++) {
+                const angle = startAngle + i * arc;
+                ctx.fillStyle = colors[i % colors.length];
+                
+                ctx.beginPath();
+                ctx.arc(radius, radius, radius, angle, angle + arc, false);
+                ctx.lineTo(radius, radius);
+                ctx.fill();
+
+                // Draw Text
+                ctx.save();
+                ctx.fillStyle = '#ffffff';
+                ctx.translate(radius + Math.cos(angle + arc / 2) * (radius * 0.65), radius + Math.sin(angle + arc / 2) * (radius * 0.65));
+                ctx.rotate(angle + arc / 2 + Math.PI / 2);
+                const text = wheelItems[i];
+                ctx.font = numSegments > 15 ? 'bold 10px sans-serif' : 'bold 13px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(text, 0, 0);
+                ctx.restore();
+            }
+        }
+
+        function initWheelCanvas() {
+            drawWheel();
+        }
+
+        function playSoundTick() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(400, ctx.currentTime);
+                gain.gain.setValueAtTime(0.05, ctx.currentTime);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.03);
+            } catch (e) {}
+        }
+
+        function spinWheel() {
+            if (isSpinning || wheelItems.length === 0) return;
+            isSpinning = true;
+            document.getElementById('winnerDisplay').classList.add('hidden');
+
+            const spinAngle = Math.floor(Math.random() * 360) + 1440;
+            const duration = 4000;
+            const startTime = performance.now();
+
+            function animate(now) {
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const easeOut = 1 - Math.pow(1 - progress, 3);
+                
+                const currentDegrees = spinAngle * easeOut;
+                startAngle = (currentDegrees * Math.PI) / 180;
+                drawWheel();
+                playSoundTick();
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    isSpinning = false;
+                    announceWinner(currentDegrees);
+                }
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        function announceWinner(degrees) {
+            const numSegments = wheelItems.length;
+            const degreesPerSegment = 360 / numSegments;
+            const normalizedDegrees = (360 - (degrees % 360) + 270) % 360;
+            const winnerIndex = Math.floor(normalizedDegrees / degreesPerSegment) % numSegments;
+            const winner = wheelItems[winnerIndex];
+
+            document.getElementById('winnerText').textContent = winner;
+            document.getElementById('winnerSubtext').textContent = document.getElementById('wheelSource').value === 'students' ? '¡Estudiante seleccionado!' : '¡Grupo seleccionado!';
+            document.getElementById('winnerDisplay').classList.remove('hidden');
+
+            if (typeof confetti === 'function') {
+                confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
+            }
+
+            if (document.getElementById('removeAfterPick').checked) {
+                wheelItems.splice(winnerIndex, 1);
+                setTimeout(drawWheel, 1000);
+            }
+        }
+
+        function generatePairs() {
+            const students = shuffleArray(getPresentStudents());
+            const grid = document.getElementById('pairsGrid');
+            grid.innerHTML = '';
+
+            if (students.length < 2) {
+                grid.innerHTML = '<div class="col-span-full text-center text-slate-400 py-4">Se necesitan al menos 2 estudiantes presentes.</div>';
+                return;
+            }
+
+            let pairIndex = 1;
+            for (let i = 0; i < students.length; i += 2) {
+                if (i + 1 < students.length) {
+                    const card = document.createElement('div');
+                    card.className = 'bg-red-50/50 border border-red-200 rounded-lg p-3 flex justify-between items-center';
+                    card.innerHTML = `
+                        <span class="text-xs font-bold text-red-700">Pareja ${pairIndex}</span>
+                        <span class="text-xs font-semibold text-slate-800">${students[i]} <i class="fa-solid fa-arrows-rotate text-red-500 mx-1.5"></i> ${students[i+1]}</span>
+                    `;
+                    grid.appendChild(card);
+                    pairIndex++;
+                } else {
+                    const card = document.createElement('div');
+                    card.className = 'bg-amber-50 border border-amber-200 rounded-lg p-3 flex justify-between items-center col-span-full';
+                    card.innerHTML = `
+                        <span class="text-xs font-bold text-amber-800">Trio de Conversación</span>
+                        <span class="text-xs font-semibold text-slate-800">${students[i]} (se une a la Pareja 1)</span>
+                    `;
+                    grid.appendChild(card);
+                }
+            }
+        }
+
+        function changePrompt() {
+            const randomPrompt = SPANISH_PROMPTS[Math.floor(Math.random() * SPANISH_PROMPTS.length)];
+            document.getElementById('currentPrompt').textContent = `"${randomPrompt}"`;
+        }
+
+        // Fullscreen Toggle for Embedded IFrames / Google Sites
+        function toggleFullScreen() {
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen();
+                } else if (document.documentElement.webkitRequestFullscreen) { /* Safari */
+                    document.documentElement.webkitRequestFullscreen();
+                } else if (document.documentElement.msRequestFullscreen) { /* IE11 */
+                    document.documentElement.msRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+            }
+        }
+
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+
+        function handleFullscreenChange() {
+            const icon = document.getElementById('fullscreenIcon');
+            const text = document.getElementById('fullscreenText');
+            const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            if (icon) {
+                icon.className = isFS ? 'fa-solid fa-compress' : 'fa-solid fa-expand';
+            }
+            if (text) {
+                text.textContent = isFS ? 'Salir' : 'Pantalla Completa';
+            }
+        }
+    </script>
+</body>
+</html>
